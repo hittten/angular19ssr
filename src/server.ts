@@ -1,5 +1,5 @@
 import { APP_BASE_HREF } from '@angular/common';
-import { CommonEngine, isMainModule } from '@angular/ssr/node';
+import { CommonEngine, createNodeRequestHandler, isMainModule } from '@angular/ssr/node';
 import express from 'express';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ const serverDistFolder = dirname(fileURLToPath(import.meta.url));
 const browserDistFolder = resolve(serverDistFolder, '../browser');
 const indexHtml = join(serverDistFolder, 'index.server.html');
 
-const app = express();
+const server = express();
 const commonEngine = new CommonEngine();
 
 /**
@@ -27,7 +27,7 @@ const commonEngine = new CommonEngine();
 /**
  * Serve static files from /browser
  */
-app.get(
+server.get(
   '**',
   express.static(browserDistFolder, {
     maxAge: '1y',
@@ -38,7 +38,7 @@ app.get(
 /**
  * Handle all other requests by rendering the Angular application.
  */
-app.get('**', (req, res, next) => {
+server.get('**', (req, res, next) => {
   const { protocol, originalUrl, baseUrl, headers } = req;
 
   commonEngine
@@ -59,7 +59,21 @@ app.get('**', (req, res, next) => {
  */
 if (isMainModule(import.meta.url)) {
   const port = process.env['PORT'] || 4000;
-  app.listen(port, () => {
+  server.listen(port, () => {
     console.log(`Node Express server listening on http://localhost:${port}`);
   });
 }
+
+/** workaround **/
+// using the suggestion from the documentation: https://angular.dev/guide/hybrid-rendering#configuring-a-nodejs-server
+
+// export const reqHandler = createNodeRequestHandler(app);
+
+// doesn't work, this would be on the firebase-tools side at:
+//  - see https://github.com/firebase/firebase-tools/pull/8145
+//  - see https://github.com/firebase/firebase-tools/pull/8145/commits/6bfdff095902c9ec469d6fe8c82223987e43e213
+
+/**
+ * The request handler used by the Angular CLI (dev-server and during build).
+ */
+export const app = () => createNodeRequestHandler(server);
